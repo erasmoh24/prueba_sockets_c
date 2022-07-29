@@ -6,16 +6,15 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <netdb.h>
 
-#define PORT 1500 
+#define PORT 8989 
 #define BUFSIZE 1024
 
 using namespace std;
 
 int main() {
     int client,server;
-    bool exit = true;
+    bool exit = false;
     char buffer[BUFSIZE];
 
     struct sockaddr_in server_addr;
@@ -25,74 +24,73 @@ int main() {
     client = socket(AF_INET,SOCK_STREAM,0);
 
     if(client < 0) {
-        printf("\nError establishing socket. \n");
-        return -1;
+        std::cout <<"\nError establishing socket. \n";
+        return 1;
     }
 
-    printf("\n=> Socket server has been created. \n");
+    std::cout << "\n=> Socket server has been created. \n";
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htons(INADDR_ANY);
-    server_addr.sin_port = PORT;
+    server_addr.sin_port = htons(PORT);
 
     if((bind(client,(struct sockaddr*)& server_addr,sizeof(server_addr))) < 0) {
-        printf("=> Error binding connection, the socket has already been established. \n");
-        return -1;
+        std::cout << "=> Error binding connection, the socket has already been established. \n";
+        return 1;
     }
 
     size = sizeof(server_addr);
-    printf("=> Waiting clients. \n");
+    std::cout << "=> Waiting clients. \n";
 
     listen(client,1);
 
     int clientCount = 1;
     server = accept(client,(struct sockaddr*)& server_addr,&size);
 
-    if(server < 0) printf("=> Error on accepting. \n"); 
-
+    if(server < 0) std::cout << "=> Error on accepting. \n"; 
     while(server > 0) {
         strcpy(buffer,"=> Server connected. \n");
         send(server,buffer,BUFSIZE,0);
-        printf("=> Connected with the client # %d ",clientCount);
+        std::cout << "=> Connected with the client #  " << clientCount;
 
-        printf("Client: ");
+        std::cout << "\nClient: ";
         do {
             recv(server,buffer,BUFSIZE,0);
-            printf("%c ",buffer);
+            std::cout << buffer << " ";
             if(*buffer == '&') {
                 *buffer = '*';
                 exit = true;
             }
         }while(*buffer != '*');
 
-        while(exit) {
-            printf("\nServer: ");
+        do{
+            std::cout << "\nServer: ";
             do {
                 cin >> buffer;
                 send(server,buffer,BUFSIZE,0);
                 if(*buffer == '&') {
                     send(server,buffer,BUFSIZE,0);
                     *buffer = '*';
-                    exit = false; 
+                    exit = true; 
                 }
 
             }while(*buffer != '*');
 
-            printf("Client: ");
+            std::cout << "Client: ";
             do {
                 recv(server,buffer,BUFSIZE,0);
-                printf("%c ",buffer);
+                std::cout << buffer << " ";
                 if(*buffer == '&') {
                     *buffer == '*';
-                    exit = false;
+                    exit = true;
                 }
             }while(*buffer != '*');
-        }
+        }while(!exit);
 
-        printf("\n\n=> Connection finalized with IP %c",inet_ntoa(server_addr.sin_addr));
+        std::cout << "\n\n=> Connection finalized with IP " << inet_ntoa(server_addr.sin_addr);
         close(server);
-        printf("\nSee you later :) \n");
-        exit = false;
+        std::cout << "\nSee you later :) \n";
+        exit = true;
         return 1;
     }
 

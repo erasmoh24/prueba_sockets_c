@@ -8,14 +8,14 @@
 #include <unistd.h>
 #include <netdb.h>
 
-#define PORT 1500 
+#define PORT 8989 
 #define BUFSIZE 1024
 
 using namespace std;
 
 int main() {
-    int client;
-    bool exit = true;
+    int client,server;
+    bool exit = false;
     char buffer[BUFSIZE];
     char* ip = "127.0.0.1";
 
@@ -25,7 +25,7 @@ int main() {
 
     if(client < 0) {
         printf("\n It has occurred an error with the connection of the socket \n");
-        return -1;
+        return 1;
     }
 
     printf("\n=> Socket client has been created. \n");
@@ -51,20 +51,20 @@ int main() {
             if(*buffer == '&') {
                 send(client,buffer,BUFSIZE,0);
                 *buffer = '*';
-                exit = false;
+                exit = true;
             }
         }while(*buffer != 42);
         printf("Server: ");
         do {
             recv(client,buffer,BUFSIZE,0);
-            cout << buffer << " ";
+            std::cout << buffer << " ";
             if(*buffer == '&') {
                *buffer = '*'; 
-               exit = false;
+               exit = true;
             }
         }while(*buffer != 42);
-        cout << std::endl;
-    }while(exit);
+        std::cout << std::endl;
+    }while(!exit);
 
     printf("\n=> Connection finalized.\nSee you later:)\n");
 
