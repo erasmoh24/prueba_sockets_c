@@ -1,100 +1,57 @@
+#include <unistd.h> 
+#include <stdio.h> 
+#include <sys/socket.h> 
+#include <stdlib.h> 
+#include <netinet/in.h> 
+#include <string.h> 
 #include <iostream>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdlib.h>
-#include <unistd.h>
+#include <pthread.h>
 
+#include "service/services.h"
 
-#define PORT 8989 
-#define BUFSIZE 1024
 
 using namespace std;
 
-int main() {
-    int client,server;
-    bool exit = false;
-    char buffer[BUFSIZE];
 
-    struct sockaddr_in server_addr;
+int main(int argc, char const *argv[]) 
+{ 
+	int serverGateSocket, mainServerSocket;   // Defines sockets for server gate and main server
+	string pass; // buffer to recieve username of the client
+	
+	serverGateSocket = createSocket(); // Creating socket file descriptor for the server gate
+    mainServerSocket = createSocket(); // Creating socket file descriptor for the main server
+	
+    struct sockaddr_in serverGateAddress = defineAddress(SERVERGATEPORT); //Defines address information for server gate address
+    struct sockaddr_in mainServerAddress = defineAddress(MAINSERVERPORT); //Defines address information for main server address
+	
+	bindSocket(serverGateSocket,serverGateAddress); // Bind server gate socket
+	bindSocket(mainServerSocket,mainServerAddress); // Bind main server socket
 
-    socklen_t size;
+	listenForConnections(serverGateSocket); // Listen for connections from server gate socket
+	listenForConnections(mainServerSocket); // Listen for connections from main server socket
 
-    client = socket(AF_INET,SOCK_STREAM,0);
 
-    if(client < 0) {
-        std::cout <<"\nError establishing socket. \n";
-        return 1;
-    }
+	while (1) // Accept connection to server gate and after a successfull log in recieve client's username
+	{
+		if((Client[clientCount].sockID = acceptConnection(serverGateSocket,&Client[clientCount], clientCount)) != -1){
+			Client[clientCount].username = recvUsername(Client[clientCount].sockID,pass); // Recieve logged in client's username
+			if(Client[clientCount].username != ""){
+			sendToken(Client[clientCount].sockID);
+			}
+		}
+			// If username of the client exist, accept connection to main server
+		
+			Client[clientCount].sockID = acceptConnection(mainServerSocket, &Client[clientCount], clientCount); //if user is valid, connects user to the communication port
+        	Client[clientCount].index = clientCount;
+			Client[clientCount].authToken = recieveToken(Client[clientCount].sockID);
 
-    std::cout << "\n=> Socket server has been created. \n";
+    		//creating thread that handle communication for each client.
+        	pthread_create(&serverThread[clientCount], NULL, sendAndReceive, (void *)&Client[clientCount]);
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htons(INADDR_ANY);
-    server_addr.sin_port = htons(PORT);
+			clientCount++;
 
-    if((bind(client,(struct sockaddr*)& server_addr,sizeof(server_addr))) < 0) {
-        std::cout << "=> Error binding connection, the socket has already been established. \n";
-        return 1;
-    }
-
-    size = sizeof(server_addr);
-    std::cout << "=> Waiting clients. \n";
-
-    listen(client,1);
-
-    int clientCount = 1;
-    server = accept(client,(struct sockaddr*)& server_addr,&size);
-
-    if(server < 0) std::cout << "=> Error on accepting. \n"; 
-    while(server > 0) {
-        strcpy(buffer,"=> Server connected. \n");
-        send(server,buffer,BUFSIZE,0);
-        std::cout << "=> Connected with the client #  " << clientCount;
-
-        std::cout << "\nClient: ";
-        do {
-            recv(server,buffer,BUFSIZE,0);
-            std::cout << buffer << " ";
-            if(*buffer == '&') {
-                *buffer = '*';
-                exit = true;
-            }
-        }while(*buffer != '*');
-
-        do{
-            std::cout << "\nServer: ";
-            do {
-                cin >> buffer;
-                send(server,buffer,BUFSIZE,0);
-                if(*buffer == '&') {
-                    send(server,buffer,BUFSIZE,0);
-                    *buffer = '*';
-                    exit = true; 
-                }
-
-            }while(*buffer != '*');
-
-            std::cout << "Client: ";
-            do {
-                recv(server,buffer,BUFSIZE,0);
-                std::cout << buffer << " ";
-                if(*buffer == '&') {
-                    *buffer == '*';
-                    exit = true;
-                }
-            }while(*buffer != '*');
-        }while(!exit);
-
-        std::cout << "\n\n=> Connection finalized with IP " << inet_ntoa(server_addr.sin_addr);
-        close(server);
-        std::cout << "\nSee you later :) \n";
-        exit = true;
-        return 1;
-    }
-
-    close(client);
-    return 0;
-}
+			continue;
+			
+	}
+	return 0; 
+} 

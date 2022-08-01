@@ -1,73 +1,86 @@
+#include <stdio.h> 
+#include <sys/socket.h> 
+#include <arpa/inet.h> 
+#include <unistd.h> 
+#include <string.h> 
 #include <iostream>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <netdb.h>
+#include <pthread.h>
 
-#define PORT 8989 
-#define BUFSIZE 1024
+#include "service/services.h"
+
+static int clientSocket;
+static int authSocket; 
 
 using namespace std;
 
-int main() {
-    int client,server;
-    bool exit = false;
-    char buffer[BUFSIZE];
-    char* ip = "127.0.0.1";
+int main(int argc, char const *argv[]) 
+{  
 
-    struct sockaddr_in server_addr;
+	authSocket = createSocket(); //Creates socket for authentication
 
-    client = socket(AF_INET,SOCK_STREAM,0);
+    struct sockaddr_in serverGateAddress = defineAddress(SERVERGATEPORT); //Defines address information for authentication address
+    struct sockaddr_in mainServerAddress = defineAddress(MAINSERVERPORT); //Defines address information for main server address
 
-    if(client < 0) {
-        printf("\n It has occurred an error with the connection of the socket \n");
-        return 1;
-    }
+	connectToServerGate(authSocket,serverGateAddress); // Connects to Server Gate
 
-    printf("\n=> Socket client has been created. \n");
+	if(menuFunction(option,authSocket)==1){ // If user log in successfully, close authentication socket, create new socket
+		genToken = recvToken(authSocket);
+		int n = genToken.length(); 
+    	char tokenChar[n + 1]; 
+    	strcpy(tokenChar, genToken.c_str());
+		string decodedToken = base64_decode(tokenChar);
+		cout << "You have access to the main server until :"<< decodedToken << endl;
+		close(authSocket);					// and connect to main server.
+		authSocket = -1;
+		clientSocket = createSocket();
+		connectToMainServer(clientSocket,mainServerAddress);
+		controlSendToken(clientSocket,genToken);
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
+		pthread_t thread;
+		pthread_create(&thread, NULL, receiveMessages, (void *)&clientSocket); //creating thread that receive messages for each client.
 
-    if(connect(client,(struct sockaddr *)& server_addr, sizeof(server_addr)) == 0) {
-        printf("=> Connection to port number: %d \n",PORT);
-    }
+		insideMenu();
+		while (1)
+		{
 
-    printf("=> Waiting response from the server. \n");
-    recv(client,buffer,BUFSIZE,0);
-    printf("=> Connection confirmed. \n");
+			char input[BUFFERSIZE];
+			cin >> input;
+			if (strcmp(input, "EXIT") == 0) // Send "EXIT" command to the server.
+			{
+				break;
+			}
 
-    printf("\n\n=> Enter & to end the connection \n");
+			if (strcmp(input, "LIST") == 0)
+			{
+				
+				send(clientSocket, input,BUFFERSIZE, 0); //Send LIST command to server.
+			}
+			if (strcmp(input, "SEND") == 0)
+			{
+				
+				send(clientSocket, input, BUFFERSIZE, 0); //Send SEND command to server.
 
-    do {
-        printf("Client: ");
-        do {
-            cin >> buffer;
-            send(client,buffer,BUFSIZE,0);
-            if(*buffer == '&') {
-                send(client,buffer,BUFSIZE,0);
-                *buffer = '*';
-                exit = true;
-            }
-        }while(*buffer != 42);
-        printf("Server: ");
-        do {
-            recv(client,buffer,BUFSIZE,0);
-            std::cout << buffer << " ";
-            if(*buffer == '&') {
-               *buffer = '*'; 
-               exit = true;
-            }
-        }while(*buffer != 42);
-        std::cout << std::endl;
-    }while(!exit);
+				cin >> input;
+				send(clientSocket, input, BUFFERSIZE, 0); //Send ID of other client to server for communicating.
 
-    printf("\n=> Connection finalized.\nSee you later:)\n");
 
-    close(client);
-    return 0;
-}
+				cin >> input ;
+				string encodee = input;
+				string encodedMessage = base64_encode(reinterpret_cast<const unsigned char*>(encodee.c_str()),encodee.length());
+				int n = encodedMessage.length(); 
+    			char char_array[n + 1]; 
+    			strcpy(char_array, encodedMessage.c_str()); // Encode the input end send encoded message to the server.
+				send(clientSocket, char_array, BUFFERSIZE, 0);
+				saveHistoryToDB(encodedMessage, getCurrentTimeForDB());
+			}
+			if (strcmp(input, "HISTORY") == 0)
+			{
+				//showHistory();
+				send(clientSocket, input,BUFFERSIZE, 0);
+			}
+
+		}
+
+	}	
+	return 0; 
+} 
